@@ -1,0 +1,201 @@
+{
+    "name": "IED_BKR",
+    "desc": "备自投装置",
+    "GOOSE": {
+        "inputs": {
+            "ExtRef": [
+                {
+                    "iedName": "IED_BCUA",
+                    "ldInst": "LD0",
+                    "prefix": "",
+                    "lnClass": "XCBR",
+                    "lnInst": "1",
+                    "doName": "Pos",
+                    "daName": "stVal",
+                    "intAddr": "LD0/GGIO1.Ind1.stVal",
+                    "desc": "",
+                    "source_desc": "断路器三相位置 (给DS_BCUA_Status)",
+                    "dest_desc": "接收断路器A位置 (来自BCUA)"
+                },
+                {
+                    "iedName": "IED_BCUB",
+                    "ldInst": "LD0",
+                    "prefix": "",
+                    "lnClass": "XCBR",
+                    "lnInst": "1",
+                    "doName": "Pos",
+                    "daName": "stVal",
+                    "intAddr": "LD0/GGIO1.Ind2.stVal",
+                    "desc": "",
+                    "source_desc": "断路器三相位置 (给DS_BCUB_Status)",
+                    "dest_desc": "接收断路器B位置 (来自BCUB)"
+                },
+                {
+                    "iedName": "IED_BCUC",
+                    "ldInst": "LD0",
+                    "prefix": "",
+                    "lnClass": "XCBR",
+                    "lnInst": "1",
+                    "doName": "Pos",
+                    "daName": "stVal",
+                    "intAddr": "LD0/GGIO1.Ind3.stVal",
+                    "desc": "",
+                    "source_desc": "断路器三相位置 (给DS_BCUC_Status)",
+                    "dest_desc": "接收断路器C位置 (来自BCUC)"
+                },
+                {
+                    "iedName": "IED_TRPROT1",
+                    "ldInst": "LD0",
+                    "prefix": "",
+                    "lnClass": "PTRC",
+                    "lnInst": "1",
+                    "doName": "Ind1",
+                    "daName": "stVal",
+                    "intAddr": "LD0/GGIO1.Ind4.stVal",
+                    "desc": "",
+                    "source_desc": "输出至备自投的闭锁信号",
+                    "dest_desc": "接收变压器1保护闭锁信号 (来自TRPROT1)"
+                },
+                {
+                    "iedName": "IED_TRPROT2",
+                    "ldInst": "LD0",
+                    "prefix": "",
+                    "lnClass": "PTRC",
+                    "lnInst": "1",
+                    "doName": "Ind1",
+                    "daName": "stVal",
+                    "intAddr": "LD0/GGIO1.Ind5.stVal",
+                    "desc": "",
+                    "source_desc": "输出至备自投的闭锁信号",
+                    "dest_desc": "接收变压器2保护闭锁信号 (来自TRPROT2)"
+                }
+            ],
+            "LN": []
+        },
+        "outputs": [
+            {
+                "name": "GCB_BKR_Commands",
+                "appID": "1010",
+                "dataSet": "DS_BKR_Commands",
+                "fcda": [
+                    {
+                        "desc": "开关A操作命令 (给DS_BKR_Commands)",
+                        "ldInst": "LD0",
+                        "prefix": "",
+                        "lnClass": "CSWI",
+                        "lnInst": "1",
+                        "doName": "Pos",
+                        "daName": "stVal",
+                        "path_info": "LD0/CSWI1.Pos.stVal"
+                    },
+                    {
+                        "desc": "开关B操作命令 (给DS_BKR_Commands)",
+                        "ldInst": "LD0",
+                        "prefix": "",
+                        "lnClass": "CSWI",
+                        "lnInst": "2",
+                        "doName": "Pos",
+                        "daName": "stVal",
+                        "path_info": "LD0/CSWI2.Pos.stVal"
+                    },
+                    {
+                        "desc": "开关C操作命令 (给DS_BKR_Commands)",
+                        "ldInst": "LD0",
+                        "prefix": "",
+                        "lnClass": "CSWI",
+                        "lnInst": "3",
+                        "doName": "Pos",
+                        "daName": "stVal",
+                        "path_info": "LD0/CSWI3.Pos.stVal"
+                    }
+                ]
+            }
+        ]
+    },
+    "SV": {
+        "inputs": {
+            "ExtRef": [
+                {
+                    "iedName": "IED_MU1",
+                    "ldInst": "MU",
+                    "prefix": "PhsA",
+                    "lnClass": "TVTR",
+                    "lnInst": "1",
+                    "doName": "Vol",
+                    "daName": "",
+                    "intAddr": "LD0/GGIO1.AnIn1",
+                    "desc": "",
+                    "source_desc": "电压采样值(A相)",
+                    "dest_desc": "接收母线1电压A相 (来自MU1)"
+                },
+                {
+                    "iedName": "IED_MU1",
+                    "ldInst": "MU",
+                    "prefix": "PhsB",
+                    "lnClass": "TVTR",
+                    "lnInst": "2",
+                    "doName": "Vol",
+                    "daName": "",
+                    "intAddr": "LD0/GGIO1.AnIn2",
+                    "desc": "",
+                    "source_desc": "电压采样值(B相)",
+                    "dest_desc": "接收母线1电压B相 (来自MU1)"
+                },
+                {
+                    "iedName": "IED_MU1",
+                    "ldInst": "MU",
+                    "prefix": "PhsC",
+                    "lnClass": "TVTR",
+                    "lnInst": "3",
+                    "doName": "Vol",
+                    "daName": "",
+                    "intAddr": "LD0/GGIO1.AnIn3",
+                    "desc": "",
+                    "source_desc": "电压采样值(C相)",
+                    "dest_desc": "接收母线1电压C相 (来自MU1)"
+                },
+                {
+                    "iedName": "IED_MU2",
+                    "ldInst": "MU",
+                    "prefix": "PhsA",
+                    "lnClass": "TVTR",
+                    "lnInst": "1",
+                    "doName": "Vol",
+                    "daName": "",
+                    "intAddr": "LD0/GGIO1.AnIn4",
+                    "desc": "",
+                    "source_desc": "电压采样值(A相)",
+                    "dest_desc": "接收母线2电压A相 (来自MU2)"
+                },
+                {
+                    "iedName": "IED_MU2",
+                    "ldInst": "MU",
+                    "prefix": "PhsB",
+                    "lnClass": "TVTR",
+                    "lnInst": "2",
+                    "doName": "Vol",
+                    "daName": "",
+                    "intAddr": "LD0/GGIO1.AnIn5",
+                    "desc": "",
+                    "source_desc": "电压采样值(B相)",
+                    "dest_desc": "接收母线2电压B相 (来自MU2)"
+                },
+                {
+                    "iedName": "IED_MU2",
+                    "ldInst": "MU",
+                    "prefix": "PhsC",
+                    "lnClass": "TVTR",
+                    "lnInst": "3",
+                    "doName": "Vol",
+                    "daName": "",
+                    "intAddr": "LD0/GGIO1.AnIn6",
+                    "desc": "",
+                    "source_desc": "电压采样值(C相)",
+                    "dest_desc": "接收母线2电压C相 (来自MU2)"
+                }
+            ],
+            "LN": []
+        },
+        "outputs": []
+    }
+}
