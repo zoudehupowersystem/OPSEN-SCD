@@ -1,6 +1,7 @@
 import unittest
 from pathlib import Path
 
+from scd_tool.gui import build_communication_rows, build_ied_rows
 from scd_tool.helpers import parse_intaddr
 from scd_tool.parser import parse_all_data, parse_mms_reports
 
@@ -50,6 +51,15 @@ class ParserTests(unittest.TestCase):
         report_map = parse_mms_reports(ROOT / 'scd_test' / 'nhb2010040813.scd')
         self.assertIn('P_110MH_144', report_map)
         self.assertIn('outputs', report_map['P_110MH_144'])
+
+
+    def test_gui_row_builders_work_without_qt_or_display(self):
+        data = parse_all_data(ROOT / 'bzt.scd')
+        ied_rows = build_ied_rows(data['IEDs'])
+        comm_rows = build_communication_rows(data['Communication'])
+        self.assertTrue(any('[MMS]' in row[0] for row in ied_rows))
+        self.assertTrue(any('ConnectedAPs' in row[0] for row in comm_rows))
+        self.assertTrue(any('GOOSE输入' in row[0] for row in ied_rows))
 
     def test_multiple_sample_files_parse(self):
         for path in (ROOT / 'scd_test').glob('*.scd'):

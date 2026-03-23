@@ -6,6 +6,7 @@
 
 - **新增 MMS 报文解析能力**：除原有 GOOSE / SV 外，现在还会解析 `ReportControl`、`RptEnabled`、`ClientLN` 以及关联 `DataSet/FCDA`，用于展示 MMS 报文的发布端与订阅端关系。
 - **重构为多文件 Python 架构**：GUI、解析器、常量、辅助函数拆分到 `scd_tool/` 包中，便于维护和继续扩展。
+- **GUI 去除 Qt 依赖**：界面层改为 Python 标准库 `tkinter + ttk`，部署更轻量。
 - **新增自动化测试**：增加 `tests/test_parser.py`，可以批量验证仓库内多份现场 SCD 样例的解析结果。
 - **保持原 GUI 使用方式**：仍然通过 `python main.py` 启动，但主入口已经变成轻量封装。
 
@@ -48,7 +49,7 @@ scd_tool/
   constants.py           # 常量
   helpers.py             # 辅助函数（如 intAddr 解析）
   parser.py              # SCD / GOOSE / SV / MMS 核心解析
-  gui.py                 # PySide6 图形界面
+  gui.py                 # tkinter 图形界面
 tests/
   test_parser.py         # 自动化测试
 scd_test/                # 现场 SCD 样例
@@ -56,11 +57,9 @@ scd_test/                # 现场 SCD 样例
 
 ## 4. 运行方式
 
-### 4.1 安装依赖
+### 4.1 环境要求
 
-```bash
-pip install PySide6
-```
+无需额外安装 Qt；GUI 基于 Python 标准库 `tkinter`。
 
 ### 4.2 启动 GUI
 
