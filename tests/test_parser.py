@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from scd_tool.gui import build_communication_rows, build_ied_rows
+from scd_tool.gui import MainWindow, build_communication_rows, build_ied_rows
 from scd_tool.helpers import parse_intaddr
 from scd_tool.parser import parse_all_data, parse_mms_reports
 
@@ -52,6 +52,12 @@ class ParserTests(unittest.TestCase):
         self.assertIn('P_110MH_144', report_map)
         self.assertIn('outputs', report_map['P_110MH_144'])
 
+
+
+    def test_gui_parent_resolution_handles_top_level_ids(self):
+        node_map = {(): '', ('ied', 'IED_A'): 'node-a'}
+        self.assertEqual('', MainWindow._resolve_parent_id({(): ''}, ('ied', 'IED_A')))
+        self.assertEqual('node-a', MainWindow._resolve_parent_id(node_map, ('ied', 'IED_A', 'GOOSE')))
 
     def test_gui_row_builders_work_without_qt_or_display(self):
         data = parse_all_data(ROOT / 'bzt.scd')

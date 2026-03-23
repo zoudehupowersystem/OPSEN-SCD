@@ -184,10 +184,17 @@ class MainWindow:
     def _clear_tree(self, tree):
         tree.delete(*tree.get_children())
 
+    @staticmethod
+    def _resolve_parent_id(node_map, node_id):
+        parent_id = node_id[:-1]
+        while parent_id not in node_map and parent_id:
+            parent_id = parent_id[:-1]
+        return node_map.get(parent_id, '')
+
     def _insert_rows(self, tree, rows: Iterable[TreeRow]):
         node_map = {(): ''}
         for left, right, node_id in rows:
-            parent = node_map[node_id[:-1]]
+            parent = self._resolve_parent_id(node_map, node_id)
             tags = self._tags_for_row(left)
             node_map[node_id] = tree.insert(parent, 'end', text=left, values=(right,), tags=tags)
 
