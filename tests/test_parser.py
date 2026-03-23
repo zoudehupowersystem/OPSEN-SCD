@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from scd_tool.gui import MainWindow, build_communication_rows, build_ied_rows
+from scd_tool.gui import MainWindow, build_circuit_models, build_communication_rows, build_ied_rows
 from scd_tool.helpers import parse_intaddr
 from scd_tool.parser import parse_all_data, parse_mms_reports
 
@@ -66,6 +66,16 @@ class ParserTests(unittest.TestCase):
         self.assertTrue(any('[MMS]' in row[0] for row in ied_rows))
         self.assertTrue(any('ConnectedAPs' in row[0] for row in comm_rows))
         self.assertTrue(any('GOOSE输入' in row[0] for row in ied_rows))
+
+    def test_circuit_models_capture_related_ieds(self):
+        data = parse_all_data(ROOT / 'bzt.scd')
+        models = build_circuit_models(data['IEDs'])
+        self.assertIn('IED_BKR', models)
+        bkr_model = models['IED_BKR']
+        edge_nodes = {edge['source'] for edge in bkr_model['edges']} | {edge['target'] for edge in bkr_model['edges']}
+        self.assertIn('IED_BCUA', edge_nodes)
+        self.assertIn('IED_MU1', edge_nodes)
+        self.assertGreaterEqual(len(bkr_model['edges']), 6)
 
     def test_multiple_sample_files_parse(self):
         for path in (ROOT / 'scd_test').glob('*.scd'):

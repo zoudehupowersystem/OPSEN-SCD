@@ -355,15 +355,26 @@ def parse_scd_file(file_path: str | Path) -> Tuple[Optional[ET.Element], Optiona
         return None, None
 
 
+
+def _resolve_file_path(file_path: str | Path) -> Path:
+    candidate = Path(file_path)
+    if candidate.exists():
+        return candidate
+    repo_root = Path(__file__).resolve().parents[1]
+    fallback = repo_root / 'scd_test' / candidate.name
+    if fallback.exists():
+        return fallback
+    return candidate
+
 def parse_all_data(file_path: str | Path):
-    root, ns_map = parse_scd_file(file_path)
+    root, ns_map = parse_scd_file(_resolve_file_path(file_path))
     if root is None or not ns_map:
         return None
     return SCDParser(root, ns_map).parse_all_data()
 
 
 def parse_mms_reports(file_path: str | Path, ied_name: Optional[str] = None):
-    data = parse_all_data(file_path)
+    data = parse_all_data(_resolve_file_path(file_path))
     if data is None:
         return None
     reports_by_ied = {ied['name']: ied['MMS'] for ied in data['IEDs']}
