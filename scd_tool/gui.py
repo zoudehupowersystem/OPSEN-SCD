@@ -542,11 +542,12 @@ class MainWindow:
             self._draw_node_box(2300, y, node_titles.get(name, name), 'peer', subtitle='展开去向')
 
         visible_edges = [edge for edge in edges if edge['source'] in node_positions and edge['target'] in node_positions]
-        for edge in sorted(visible_edges, key=lambda item: (not item['is_focus_edge'], item['protocol'], item['source'], item['target'])):
+        grouped_visible_edges = self._group_edges_for_display(visible_edges)
+        for edge in sorted(grouped_visible_edges, key=lambda item: (not item['is_focus_edge'], item['protocol'], item['source'], item['target'])):
             self._draw_edge(node_positions[edge['source']], node_positions[edge['target']], edge)
 
         self._update_detail_panel(model, incoming, outgoing, visible_edges, expand_related)
-        self.summary_var.set(self._summary_text(model, len(visible_edges), len(left_nodes), len(right_nodes), expand_related))
+        self.summary_var.set(self._summary_text(model, len(grouped_visible_edges), len(left_nodes), len(right_nodes), expand_related))
         self.status_var.set(f"已显示 {os.path.basename(self.current_scd_path) if self.current_scd_path else ''} / {focus} 的回路。")
         self.current_canvas_bounds = (0, 0, 2600, 1600)
         self._reset_canvas_zoom()
@@ -558,6 +559,58 @@ class MainWindow:
         total_height = (len(names) - 1) * gap
         start = center - total_height / 2
         return {name: start + idx * gap for idx, name in enumerate(names)}
+
+    def _group_edges_for_display(self, edges):
+        grouped = {}
+        for edge in edges:
+            key = (edge['source'], edge['target'], edge['protocol'])
+            bucket = grouped.setdefault(key, {
+                'source': edge['source'],
+                'target': edge['target'],
+                'protocol': edge['protocol'],
+                'source_labels': [],
+                'target_labels': [],
+                'meta_items': [],
+                'is_focus_edge': False,
+            })
+            bucket['source_labels'].append(edge['left_text'])
+            bucket['target_labels'].append(edge['right_text'])
+            bucket['meta_items'].append(edge['meta'])
+            bucket['is_focus_edge'] = bucket['is_focus_edge'] or edge.get('is_focus_edge', False)
+
+        result = []
+        for item in grouped.values():
+            result.append({
+                'source': item['source'],
+                'target': item['target'],
+                'protocol': item['protocol'],
+                'left_text': self._summarize_edge_labels(item['source_labels']),
+                'right_text': self._summarize_edge_labels(item['target_labels']),
+                'meta': self._summarize_edge_labels(item['meta_items'], max_items=2),
+                'is_focus_edge': item['is_focus_edge'],
+                'edge_count': len(item['source_labels']),
+            })
+        return result
+
+    @staticmethod
+    def _summarize_edge_labels(labels, max_items=3):
+        seen = []
+        for label in labels:
+            if label not in seen:
+                seen.append(label)
+        if not seen:
+            return ''
+        if len(seen) == 1:
+            return seen[0]
+        head = ' / '.join(seen[:max_items])
+        more = len(seen) - max_items
+        return f"{head} 等{len(seen)}项" if more > 0 else head
+
+    @staticmethod
+    def _truncate_text(text, limit=22):
+        if len(text) <= limit:
+            return text
+        return text[: limit - 1] + '…'
 
     def _draw_node_box(self, x, y, title, role, subtitle=''):
         style = BOX_STYLES[role]
@@ -593,12 +646,15 @@ class MainWindow:
         self.canvas.create_line(start[0], start[1], mid_x, sy, mid_x, ty, end[0], end[1], fill=style['line'], width=line_width, dash=dash, smooth=False, arrow='last')
         badge_x = mid_x
         badge_y = (sy + ty) / 2
-        badge_text = self._badge_text(edge)
+        badge_text = self._badge_text(edge) if edge.get('edge_count', 1) == 1 else f"{self._badge_text(edge)} x{edge['edge_count']}"
         self._draw_badge(badge_x, badge_y, badge_text, style['badge_bg'], style['badge_fg'])
-        left_anchor = 'w' if source_right else 'e'
-        right_anchor = 'e' if source_right else 'w'
-        self.canvas.create_text(start[0] + (8 if source_right else -8), sy - 10, text=self._display_text(edge, 'source'), anchor=left_anchor, fill=style['line'], font=('Microsoft YaHei UI', 9))
-        self.canvas.create_text(end[0] - (8 if source_right else -8), ty + 10, text=self._display_text(edge, 'target'), anchor=right_anchor, fill=style['line'], font=('Microsoft YaHei UI', 9))
+
+        source_text = self._truncate_text(self._display_text(edge, 'source'), 24)
+        target_text = self._truncate_text(self._display_text(edge, 'target'), 24)
+        source_label_x = start[0] + (110 if source_right else -110)
+        target_label_x = end[0] - (110 if source_right else -110)
+        self._draw_line_label(source_label_x, sy - 14, source_text, style['line'])
+        self._draw_line_label(target_label_x, ty + 14, target_text, style['line'])
 
     def _badge_text(self, edge):
         if edge['protocol'] == 'GOOSE':
@@ -613,6 +669,13 @@ class MainWindow:
         height = 22
         self.canvas.create_rectangle(x - width / 2, y - height / 2, x + width / 2, y + height / 2, fill=fill, outline='#ffffff')
         self.canvas.create_text(x, y, text=text, fill=fg, font=('Consolas', 10, 'bold'))
+
+    def _draw_line_label(self, x, y, text, color):
+        label_font = ('Microsoft YaHei UI', 9)
+        text_id = self.canvas.create_text(x, y, text=text, fill=color, font=label_font)
+        x1, y1, x2, y2 = self.canvas.bbox(text_id)
+        self.canvas.create_rectangle(x1 - 4, y1 - 2, x2 + 4, y2 + 2, fill='#ffffff', outline='', stipple='gray12')
+        self.canvas.tag_raise(text_id)
 
     def _update_detail_panel(self, model, incoming, outgoing, all_edges, expand_related):
         if not self.detail_text:
