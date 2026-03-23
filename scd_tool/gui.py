@@ -649,12 +649,9 @@ class MainWindow:
         badge_text = self._badge_text(edge) if edge.get('edge_count', 1) == 1 else f"{self._badge_text(edge)} x{edge['edge_count']}"
         self._draw_badge(badge_x, badge_y, badge_text, style['badge_bg'], style['badge_fg'])
 
-        source_text = self._truncate_text(self._display_text(edge, 'source'), 24)
-        target_text = self._truncate_text(self._display_text(edge, 'target'), 24)
-        source_label_x = start[0] + (110 if source_right else -110)
-        target_label_x = end[0] - (110 if source_right else -110)
-        self._draw_line_label(source_label_x, sy - 14, source_text, style['line'])
-        self._draw_line_label(target_label_x, ty + 14, target_text, style['line'])
+        if edge.get('edge_count', 1) == 1:
+            compact = self._truncate_text(self._display_text(edge, 'source'), 10)
+            self._draw_compact_edge_hint(badge_x, badge_y + 24, compact, style['line'])
 
     def _badge_text(self, edge):
         if edge['protocol'] == 'GOOSE':
@@ -670,11 +667,11 @@ class MainWindow:
         self.canvas.create_rectangle(x - width / 2, y - height / 2, x + width / 2, y + height / 2, fill=fill, outline='#ffffff')
         self.canvas.create_text(x, y, text=text, fill=fg, font=('Consolas', 10, 'bold'))
 
-    def _draw_line_label(self, x, y, text, color):
-        label_font = ('Microsoft YaHei UI', 9)
+    def _draw_compact_edge_hint(self, x, y, text, color):
+        label_font = ('Microsoft YaHei UI', 8)
         text_id = self.canvas.create_text(x, y, text=text, fill=color, font=label_font)
         x1, y1, x2, y2 = self.canvas.bbox(text_id)
-        self.canvas.create_rectangle(x1 - 4, y1 - 2, x2 + 4, y2 + 2, fill='#ffffff', outline='', stipple='gray12')
+        self.canvas.create_rectangle(x1 - 3, y1 - 1, x2 + 3, y2 + 1, fill='#ffffff', outline='')
         self.canvas.tag_raise(text_id)
 
     def _update_detail_panel(self, model, incoming, outgoing, all_edges, expand_related):
