@@ -151,97 +151,80 @@ def _node_label(ied: dict) -> str:
 
 def build_circuit_models(ied_list: List[dict]) -> Dict[str, dict]:
     ied_lookup = {ied['name']: ied for ied in ied_list}
+    global_edges = _collect_subscription_edges(ied_list, ied_lookup)
+    direct_neighbors: Dict[str, set[str]] = {ied['name']: set() for ied in ied_list}
+    for edge in global_edges:
+        direct_neighbors.setdefault(edge['source'], set()).add(edge['target'])
+        direct_neighbors.setdefault(edge['target'], set()).add(edge['source'])
+
     models = {}
     for ied in ied_list:
-        nodes = {ied['name']: {'name': ied['name'], 'title': _node_label(ied), 'role': 'center'}}
-        edges = []
-        for protocol in ('GOOSE', 'SV', 'MMS'):
-            if protocol in ('GOOSE', 'SV'):
-                section = ied[protocol]
-                for entry in section['inputs']['ExtRef']:
-                    src_name = entry.get('iedName') or '未知IED'
-                    src_ied = ied_lookup.get(src_name, {'name': src_name, 'desc': ''})
-                    nodes.setdefault(src_name, {'name': src_name, 'title': _node_label(src_ied), 'role': 'peer'})
-                    edges.append({
-                        'source': src_name,
-                        'target': ied['name'],
-                        'protocol': protocol,
-                        'direction': 'in',
-                        'left_text': entry.get('source_desc') or '(未命名源)',
-                        'right_text': entry.get('dest_desc') or '(未命名目标)',
-                        'meta': f"源IED={src_name} | intAddr={entry.get('intAddr') or 'N/A'}",
-                    })
-                for out in section['outputs']:
-                    if protocol == 'GOOSE':
-                        payloads = out['fcda']
-                        label = out.get('name') or 'GSE'
-                        badge = f"GOOSE 0x{out.get('appID') or '----'}"
-                    else:
-                        payloads = []
-                        for group in out['grouped']:
-                            payloads.extend(group['fcda_details'])
-                        payloads.extend(out['individual'])
-                        label = out.get('name') or 'SMV'
-                        badge = f"SV {out.get('smvID') or 'N/A'}"
-                    for item in payloads:
-                        dst_name = _guess_target_ied(item.get('desc', ''), ied_lookup, exclude=ied['name'])
-                        if not dst_name:
-                            continue
-                        dst_ied = ied_lookup.get(dst_name, {'name': dst_name, 'desc': ''})
-                        nodes.setdefault(dst_name, {'name': dst_name, 'title': _node_label(dst_ied), 'role': 'peer'})
-                        edges.append({
-                            'source': ied['name'],
-                            'target': dst_name,
-                            'protocol': protocol,
-                            'direction': 'out',
-                            'left_text': item.get('desc') or label,
-                            'right_text': item.get('desc') or label,
-                            'meta': f"控制块={label} | 标识={badge} | 路径={item.get('path_info','')}",
-                        })
-            else:
-                for entry in ied['MMS']['inputs']:
-                    src_name = entry['source_ied']
-                    src_ied = ied_lookup.get(src_name, {'name': src_name, 'desc': ''})
-                    nodes.setdefault(src_name, {'name': src_name, 'title': _node_label(src_ied), 'role': 'peer'})
-                    edges.append({
-                        'source': src_name,
-                        'target': ied['name'],
-                        'protocol': 'MMS',
-                        'direction': 'in',
-                        'left_text': f"Report {entry['report_name']}",
-                        'right_text': entry.get('client_ref') or 'MMS Client',
-                        'meta': f"RptID={entry.get('rptID','')} | DataSet={entry.get('dataSet','')}",
-                    })
-                for out in ied['MMS']['outputs']:
-                    for client in out['clients']:
-                        dst_name = client.get('iedName')
-                        if not dst_name:
-                            continue
-                        dst_ied = ied_lookup.get(dst_name, {'name': dst_name, 'desc': ''})
-                        nodes.setdefault(dst_name, {'name': dst_name, 'title': _node_label(dst_ied), 'role': 'peer'})
-                        edges.append({
-                            'source': ied['name'],
-                            'target': dst_name,
-                            'protocol': 'MMS',
-                            'direction': 'out',
-                            'left_text': f"Report {out.get('name')}",
-                            'right_text': client.get('desc') or dst_name,
-                            'meta': f"RptID={out.get('rptID','')} | DataSet={out.get('dataSet','')}",
-                        })
-        models[ied['name']] = {
-            'focus_ied': ied['name'],
+        focus = ied['name']
+        first_level = direct_neighbors.get(focus, set())
+        visible_names = {focus, *first_level}
+        expanded_names = set(visible_names)
+        for neighbor in first_level:
+            expanded_names.update(direct_neighbors.get(neighbor, set()))
+
+        direct_edges = [edge for edge in global_edges if edge['source'] == focus or edge['target'] == focus]
+        expanded_edges = [edge for edge in global_edges if edge['source'] in expanded_names and edge['target'] in expanded_names]
+        nodes = {}
+        for name in expanded_names:
+            src = ied_lookup.get(name, {'name': name, 'desc': ''})
+            nodes[name] = {'name': name, 'title': _node_label(src), 'role': 'center' if name == focus else 'peer'}
+
+        models[focus] = {
+            'focus_ied': focus,
             'focus_title': _node_label(ied),
             'nodes': list(nodes.values()),
-            'edges': _dedupe_edges(edges),
-            'stats': _collect_model_stats(ied, edges),
+            'direct_edges': _dedupe_edges(direct_edges),
+            'expanded_edges': _dedupe_edges(expanded_edges),
+            'stats': _collect_model_stats(ied, direct_edges, expanded_edges),
         }
     return models
 
 
-def _collect_model_stats(ied: dict, edges: List[dict]) -> dict:
+def _collect_subscription_edges(ied_list: List[dict], ied_lookup: Dict[str, dict]) -> List[dict]:
+    edges = []
+    for target_ied in ied_list:
+        target_name = target_ied['name']
+        for protocol in ('GOOSE', 'SV'):
+            for entry in target_ied[protocol]['inputs']['ExtRef']:
+                source_name = entry.get('iedName') or '未知IED'
+                if source_name not in ied_lookup:
+                    ied_lookup[source_name] = {'name': source_name, 'desc': ''}
+                edges.append({
+                    'source': source_name,
+                    'target': target_name,
+                    'protocol': protocol,
+                    'left_text': entry.get('source_desc') or '(未命名源)',
+                    'right_text': entry.get('dest_desc') or '(未命名目标)',
+                    'meta': f"源IED={source_name} | intAddr={entry.get('intAddr') or 'N/A'}",
+                    'is_focus_edge': False,
+                })
+        for item in target_ied['MMS']['inputs']:
+            source_name = item['source_ied']
+            if source_name not in ied_lookup:
+                ied_lookup[source_name] = {'name': source_name, 'desc': ''}
+            edges.append({
+                'source': source_name,
+                'target': target_name,
+                'protocol': 'MMS',
+                'left_text': f"Report {item['report_name']}",
+                'right_text': item.get('client_ref') or 'MMS Client',
+                'meta': f"RptID={item.get('rptID','')} | DataSet={item.get('dataSet','')}",
+                'is_focus_edge': False,
+            })
+    return edges
+
+
+def _collect_model_stats(ied: dict, direct_edges: List[dict], expanded_edges: List[dict]) -> dict:
     protocol_counts = {protocol: 0 for protocol in ('GOOSE', 'SV', 'MMS')}
-    for edge in edges:
+    expanded_counts = {protocol: 0 for protocol in ('GOOSE', 'SV', 'MMS')}
+    for edge in direct_edges:
         protocol_counts[edge['protocol']] += 1
+    for edge in expanded_edges:
+        expanded_counts[edge['protocol']] += 1
     return {
         'goose_inputs': len(ied['GOOSE']['inputs']['ExtRef']),
         'goose_outputs': len(ied['GOOSE']['outputs']),
@@ -250,6 +233,7 @@ def _collect_model_stats(ied: dict, edges: List[dict]) -> dict:
         'mms_inputs': len(ied['MMS']['inputs']),
         'mms_outputs': len(ied['MMS']['outputs']),
         'edge_counts': protocol_counts,
+        'expanded_edge_counts': expanded_counts,
     }
 
 
@@ -265,19 +249,6 @@ def _dedupe_edges(edges: List[dict]) -> List[dict]:
     return result
 
 
-def _guess_target_ied(text: str, ied_lookup: Dict[str, dict], exclude: str | None = None) -> str | None:
-    if not text:
-        return None
-    upper_text = text.upper()
-    for ied_name in ied_lookup:
-        if ied_name == exclude:
-            continue
-        short = ied_name.replace('IED_', '')
-        if short and short.upper() in upper_text:
-            return ied_name
-    return None
-
-
 class MainWindow:
     def __init__(self):
         self.root = tk.Tk()
@@ -289,6 +260,7 @@ class MainWindow:
         self.circuit_models: Dict[str, dict] = {}
         self.current_view_ied: str | None = None
         self.current_scale = 1.0
+        self.current_expand_related = True
         self.current_canvas_bounds = (0, 0, 2200, 1400)
         self.tree_item_to_ied: Dict[str, str] = {}
         self.current_filter = ''
@@ -513,13 +485,14 @@ class MainWindow:
         if not ied_name:
             return
         self.current_view_ied = ied_name
+        self.current_expand_related = expand_related
         self.draw_circuit(self.circuit_models.get(ied_name), expand_related=expand_related)
         if self.ied_selector.get() != ied_name and self.scd_data:
             self.ied_selector.set(ied_name)
 
     def _redraw_current_circuit(self):
         if self.current_view_ied:
-            self.draw_circuit(self.circuit_models.get(self.current_view_ied), expand_related=True)
+            self.draw_circuit(self.circuit_models.get(self.current_view_ied), expand_related=self.current_expand_related)
 
     def draw_circuit(self, model: dict | None, expand_related=True):
         if not self.canvas:
@@ -528,70 +501,60 @@ class MainWindow:
         if not model:
             self.canvas.create_text(80, 60, anchor='nw', text='请先加载 SCD 文件或选择装置。', fill='#52606d', font=('Microsoft YaHei UI', 14, 'bold'))
             return
+
         focus = model['focus_ied']
         enabled_protocols = {name for name, var in self.protocol_vars.items() if var.get()}
-        edges = [edge for edge in model['edges'] if edge['protocol'] in enabled_protocols]
+        edge_key = 'expanded_edges' if expand_related else 'direct_edges'
+        edges = [dict(edge, is_focus_edge=(edge['source'] == focus or edge['target'] == focus)) for edge in model[edge_key] if edge['protocol'] in enabled_protocols]
         incoming = [edge for edge in edges if edge['target'] == focus]
         outgoing = [edge for edge in edges if edge['source'] == focus]
-        peers = {}
-        for edge in edges:
-            if edge['source'] != focus:
-                peers.setdefault(edge['source'], {'incoming': [], 'outgoing': []})['outgoing'].append(edge)
-            if edge['target'] != focus:
-                peers.setdefault(edge['target'], {'incoming': [], 'outgoing': []})['incoming'].append(edge)
-        left_nodes = sorted([name for name in peers if any(edge['target'] == focus and edge['source'] == name for edge in incoming)])
-        right_nodes = sorted([name for name in peers if any(edge['source'] == focus and edge['target'] == name for edge in outgoing)])
-        if not expand_related:
-            left_nodes = left_nodes[:]
-            right_nodes = right_nodes[:]
-        if focus not in model['focus_title']:
-            title = model['focus_title']
-        else:
-            title = model['focus_title']
-        self.canvas.create_rectangle(0, 0, 2200, 1400, fill='#ffffff', outline='')
-        self.canvas.create_text(40, 28, anchor='nw', text=f'回路总览：{title}', fill='#25384b', font=('Microsoft YaHei UI', 16, 'bold'))
-        self.canvas.create_text(40, 58, anchor='nw', text='参考商业化 GOOSE/SV 浏览器布局：左侧源装置，中央当前IED，右侧受影响装置；工具栏可展开相关回路。', fill='#607080', font=('Microsoft YaHei UI', 9))
+        direct_neighbors = {edge['source'] for edge in incoming} | {edge['target'] for edge in outgoing}
+        secondary_sources = sorted({edge['source'] for edge in edges if edge['target'] in direct_neighbors and edge['source'] not in direct_neighbors and edge['source'] != focus})
+        secondary_targets = sorted({edge['target'] for edge in edges if edge['source'] in direct_neighbors and edge['target'] not in direct_neighbors and edge['target'] != focus})
+        left_nodes = sorted({edge['source'] for edge in edges if edge['target'] == focus})
+        right_nodes = sorted({edge['target'] for edge in edges if edge['source'] == focus})
 
-        node_positions = {focus: (1110, 700)}
-        self._draw_node_box(1110, 700, model['focus_title'], 'center', subtitle='当前装置')
+        self.canvas.create_rectangle(0, 0, 2600, 1600, fill='#ffffff', outline='')
+        self.canvas.create_text(40, 28, anchor='nw', text=f"回路总览：{model['focus_title']}", fill='#25384b', font=('Microsoft YaHei UI', 16, 'bold'))
+        mode_text = '已展开二级关联回路' if expand_related else '仅显示当前装置直接回路'
+        self.canvas.create_text(40, 58, anchor='nw', text=f'布局说明：左一列/右一列为当前装置直接相连装置，最外层列为展开后的二级关联装置。当前模式：{mode_text}。', fill='#607080', font=('Microsoft YaHei UI', 9))
 
-        left_y_positions = self._stack_positions(240, left_nodes, 190)
-        right_y_positions = self._stack_positions(1980, right_nodes, 190)
         node_titles = {node['name']: node['title'] for node in model['nodes']}
-        for name, y in left_y_positions.items():
-            node_positions[name] = (240, y)
-            self._draw_node_box(240, y, node_titles.get(name, name), 'peer', subtitle='关联源装置')
-        for name, y in right_y_positions.items():
-            node_positions[name] = (1980, y)
-            self._draw_node_box(1980, y, node_titles.get(name, name), 'peer', subtitle='关联目标装置')
+        node_positions = {focus: (1300, 780)}
+        self._draw_node_box(1300, 780, model['focus_title'], 'center', subtitle='当前装置')
 
-        if expand_related:
-            far_left = [name for name in peers if name not in left_nodes and name not in right_nodes]
-            aux_positions = self._stack_positions(580, far_left, 140)
-            for name, y in aux_positions.items():
-                node_positions[name] = (580, y)
-                self._draw_node_box(580, y, node_titles.get(name, name), 'peer', subtitle='扩展装置')
+        primary_left_positions = self._stack_positions(760, left_nodes, 180, center=780)
+        primary_right_positions = self._stack_positions(1840, right_nodes, 180, center=780)
+        secondary_left_positions = self._stack_positions(300, secondary_sources, 160, center=780) if expand_related else {}
+        secondary_right_positions = self._stack_positions(2300, secondary_targets, 160, center=780) if expand_related else {}
 
-        for edge in edges:
-            src = edge['source']
-            dst = edge['target']
-            if src not in node_positions or dst not in node_positions:
-                continue
-            sx, sy = node_positions[src]
-            tx, ty = node_positions[dst]
-            self._draw_edge((sx, sy), (tx, ty), edge)
+        for name, y in primary_left_positions.items():
+            node_positions[name] = (760, y)
+            self._draw_node_box(760, y, node_titles.get(name, name), 'peer', subtitle='直接来源')
+        for name, y in primary_right_positions.items():
+            node_positions[name] = (1840, y)
+            self._draw_node_box(1840, y, node_titles.get(name, name), 'peer', subtitle='直接去向')
+        for name, y in secondary_left_positions.items():
+            node_positions[name] = (300, y)
+            self._draw_node_box(300, y, node_titles.get(name, name), 'peer', subtitle='展开来源')
+        for name, y in secondary_right_positions.items():
+            node_positions[name] = (2300, y)
+            self._draw_node_box(2300, y, node_titles.get(name, name), 'peer', subtitle='展开去向')
 
-        self._update_detail_panel(model, incoming, outgoing, edges)
-        self.summary_var.set(self._summary_text(model, len(edges), len(left_nodes), len(right_nodes)))
+        visible_edges = [edge for edge in edges if edge['source'] in node_positions and edge['target'] in node_positions]
+        for edge in sorted(visible_edges, key=lambda item: (not item['is_focus_edge'], item['protocol'], item['source'], item['target'])):
+            self._draw_edge(node_positions[edge['source']], node_positions[edge['target']], edge)
+
+        self._update_detail_panel(model, incoming, outgoing, visible_edges, expand_related)
+        self.summary_var.set(self._summary_text(model, len(visible_edges), len(left_nodes), len(right_nodes), expand_related))
         self.status_var.set(f"已显示 {os.path.basename(self.current_scd_path) if self.current_scd_path else ''} / {focus} 的回路。")
-        self.current_canvas_bounds = (0, 0, 2200, 1400)
+        self.current_canvas_bounds = (0, 0, 2600, 1600)
         self._reset_canvas_zoom()
 
     @staticmethod
-    def _stack_positions(x, names, gap):
+    def _stack_positions(x, names, gap, center=700):
         if not names:
             return {}
-        center = 700
         total_height = (len(names) - 1) * gap
         start = center - total_height / 2
         return {name: start + idx * gap for idx, name in enumerate(names)}
@@ -626,7 +589,8 @@ class MainWindow:
         mid_x = (start[0] + end[0]) / 2
         style = PROTOCOL_STYLES[edge['protocol']]
         dash = () if edge['protocol'] == 'SV' else (6, 3) if edge['protocol'] == 'GOOSE' else (3, 2)
-        self.canvas.create_line(start[0], start[1], mid_x, sy, mid_x, ty, end[0], end[1], fill=style['line'], width=2.0, dash=dash, smooth=False, arrow='last')
+        line_width = 2.6 if edge.get('is_focus_edge') else 1.6
+        self.canvas.create_line(start[0], start[1], mid_x, sy, mid_x, ty, end[0], end[1], fill=style['line'], width=line_width, dash=dash, smooth=False, arrow='last')
         badge_x = mid_x
         badge_y = (sy + ty) / 2
         badge_text = self._badge_text(edge)
@@ -650,7 +614,7 @@ class MainWindow:
         self.canvas.create_rectangle(x - width / 2, y - height / 2, x + width / 2, y + height / 2, fill=fill, outline='#ffffff')
         self.canvas.create_text(x, y, text=text, fill=fg, font=('Consolas', 10, 'bold'))
 
-    def _update_detail_panel(self, model, incoming, outgoing, all_edges):
+    def _update_detail_panel(self, model, incoming, outgoing, all_edges, expand_related):
         if not self.detail_text:
             return
         stats = model['stats']
@@ -662,6 +626,7 @@ class MainWindow:
             f"  SV   : 输入 {stats['sv_inputs']} / 输出 {stats['sv_outputs']}",
             f"  MMS  : 输入 {stats['mms_inputs']} / 输出 {stats['mms_outputs']}",
             f"  当前画布链路数: {len(all_edges)}",
+            f"  展开状态: {'二级展开' if expand_related else '仅直接回路'}",
             '',
             '入向回路',
         ]
@@ -687,11 +652,12 @@ class MainWindow:
         self.detail_text.insert('1.0', '\n'.join(lines))
         self.detail_text.configure(state='disabled')
 
-    def _summary_text(self, model, edge_count, left_count, right_count):
-        edge_counts = model['stats']['edge_counts']
+    def _summary_text(self, model, edge_count, left_count, right_count, expand_related):
+        edge_counts = model['stats']['expanded_edge_counts' if expand_related else 'edge_counts']
+        mode = '已展开' if expand_related else '直接'
         return (
             f"设备 {model['focus_ied']} | 左侧关联 {left_count} | 右侧关联 {right_count} | "
-            f"GOOSE {edge_counts['GOOSE']} / SV {edge_counts['SV']} / MMS {edge_counts['MMS']} | 当前显示 {edge_count} 条链路"
+            f"GOOSE {edge_counts['GOOSE']} / SV {edge_counts['SV']} / MMS {edge_counts['MMS']} | {mode}显示 {edge_count} 条链路"
         )
 
     def _fit_canvas_to_content(self):
@@ -778,8 +744,9 @@ class MainWindow:
         if not file_path:
             return
         enabled = {name for name, var in self.protocol_vars.items() if var.get()}
+        edge_key = 'expanded_edges' if self.current_expand_related else 'direct_edges'
         lines = [f"回路摘要: {model['focus_title']}", '']
-        for edge in model['edges']:
+        for edge in model[edge_key]:
             if edge['protocol'] not in enabled:
                 continue
             lines.append(f"[{edge['protocol']}] {edge['source']} -> {edge['target']}")
