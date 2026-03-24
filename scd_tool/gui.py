@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import tkinter as tk
 from tkinter import filedialog, font, messagebox, ttk
 from typing import Dict, Iterable, List, Tuple
@@ -517,7 +518,7 @@ class MainWindow:
         self.canvas.create_rectangle(0, 0, 2600, 1600, fill='#ffffff', outline='')
         self.canvas.create_text(40, 28, anchor='nw', text=f"回路总览：{model['focus_title']}", fill='#25384b', font=('Microsoft YaHei UI', 16, 'bold'))
         mode_text = '已展开二级关联回路' if expand_related else '仅显示当前装置直接回路'
-        self.canvas.create_text(40, 58, anchor='nw', text=f'布局说明：左一列/右一列为当前装置直接相连装置，最外层列为展开后的二级关联装置。当前模式：{mode_text}。', fill='#607080', font=('Microsoft YaHei UI', 9))
+        self.canvas.create_text(40, 58, anchor='nw', text=f'布局说明：中间为当前装置，左右两侧为一跳关联装置；若开启展开，最外层补充二级关联装置。颜色区分协议，实线=与当前装置直接相连，虚线=展开出的二级关联。当前模式：{mode_text}。', fill='#607080', font=('Microsoft YaHei UI', 9))
 
         node_titles = {node['name']: node['title'] for node in model['nodes']}
         node_positions = {focus: (1300, 780)}
@@ -530,16 +531,16 @@ class MainWindow:
 
         for name, y in primary_left_positions.items():
             node_positions[name] = (760, y)
-            self._draw_node_box(760, y, node_titles.get(name, name), 'peer', subtitle='直接来源')
+            self._draw_node_box(760, y, node_titles.get(name, name), 'peer', subtitle='一跳关联装置')
         for name, y in primary_right_positions.items():
             node_positions[name] = (1840, y)
-            self._draw_node_box(1840, y, node_titles.get(name, name), 'peer', subtitle='直接去向')
+            self._draw_node_box(1840, y, node_titles.get(name, name), 'peer', subtitle='一跳关联装置')
         for name, y in secondary_left_positions.items():
             node_positions[name] = (300, y)
-            self._draw_node_box(300, y, node_titles.get(name, name), 'peer', subtitle='展开来源')
+            self._draw_node_box(300, y, node_titles.get(name, name), 'peer', subtitle='二级关联装置')
         for name, y in secondary_right_positions.items():
             node_positions[name] = (2300, y)
-            self._draw_node_box(2300, y, node_titles.get(name, name), 'peer', subtitle='展开去向')
+            self._draw_node_box(2300, y, node_titles.get(name, name), 'peer', subtitle='二级关联装置')
 
         visible_edges = [edge for edge in edges if edge['source'] in node_positions and edge['target'] in node_positions]
         grouped_visible_edges = self._group_edges_for_display(visible_edges)
@@ -612,6 +613,12 @@ class MainWindow:
             return text
         return text[: limit - 1] + '…'
 
+    @staticmethod
+    def _compact_edge_text(text: str) -> str:
+        text = re.split(r'[（(]', text, maxsplit=1)[0].strip()
+        text = re.sub(r'[（）()\[\]【】<>《》]+$', '', text).strip()
+        return text or '链路'
+
     def _draw_node_box(self, x, y, title, role, subtitle=''):
         style = BOX_STYLES[role]
         width = 220
@@ -641,7 +648,7 @@ class MainWindow:
         end = (tx - 110 if source_right else tx + 110, ty)
         mid_x = (start[0] + end[0]) / 2
         style = PROTOCOL_STYLES[edge['protocol']]
-        dash = () if edge['protocol'] == 'SV' else (6, 3) if edge['protocol'] == 'GOOSE' else (3, 2)
+        dash = () if edge.get('is_focus_edge') else (4, 3)
         line_width = 2.6 if edge.get('is_focus_edge') else 1.6
         self.canvas.create_line(start[0], start[1], mid_x, sy, mid_x, ty, end[0], end[1], fill=style['line'], width=line_width, dash=dash, smooth=False, arrow='last')
         badge_x = mid_x
@@ -650,7 +657,7 @@ class MainWindow:
         self._draw_badge(badge_x, badge_y, badge_text, style['badge_bg'], style['badge_fg'])
 
         if edge.get('edge_count', 1) == 1:
-            compact = self._truncate_text(self._display_text(edge, 'source'), 10)
+            compact = self._truncate_text(self._compact_edge_text(self._display_text(edge, 'source')), 10)
             self._draw_compact_edge_hint(badge_x, badge_y + 24, compact, style['line'])
 
     def _badge_text(self, edge):
