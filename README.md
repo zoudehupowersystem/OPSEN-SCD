@@ -1,106 +1,239 @@
-# SCD 开源解析工具 pySCD
+# pySCD：IEC 61850 SCD 解析与回路可视化工具
 
-## 1. 项目升级概览
+`pySCD` 是一个面向 IEC 61850 工程文件（SCD/ICD/CID/IID/SSD/SED/XML）的 Python 工具，提供两类核心能力：
 
-这个版本对原型工具做了较大幅度的工程化改造：
+1. **结构化解析**：按 IED 维度提取 GOOSE / SV / MMS（ReportControl）输入输出关系。  
+2. **工程可视化**：通过桌面 GUI 展示通信与回路关系，支持按装置聚焦、展开二级关联、协议筛选、导出摘要。
 
-- **新增 MMS 报文解析能力**：除原有 GOOSE / SV 外，现在还会解析 `ReportControl`、`RptEnabled`、`ClientLN` 以及关联 `DataSet/FCDA`，用于展示 MMS 报文的发布端与订阅端关系。
-- **重构为多文件 Python 架构**：GUI、解析器、常量、辅助函数拆分到 `scd_tool/` 包中，便于维护和继续扩展。
-- **GUI 去除 Qt 依赖**：界面层改为 Python 标准库 `tkinter + ttk`，部署更轻量。
-- **新增自动化测试**：增加 `tests/test_parser.py`，可以批量验证仓库内多份现场 SCD 样例的解析结果。
-- **保持原 GUI 使用方式**：仍然通过 `python main.py` 启动，但主入口已经变成轻量封装。
+本项目使用 Python 标准库构建（GUI 基于 `tkinter + ttk`），适合离线调试、教学演示与轻量工程核对。
 
-## 2. 当前支持的解析范围
+---
 
-### 2.1 GOOSE
+## 1. 项目目标与适用场景
 
-- `Inputs/ExtRef` 输入解析
-- 基于逻辑节点的 GOOSE 输入识别
-- `GSEControl` 输出与 `DataSet/FCDA` 成员展开
+### 1.1 目标
 
-### 2.2 SV
+- 快速回答“**谁发了什么、谁订阅了什么、数据集里有什么点**”这类工程问题。
+- 降低对重型商用配置工具的依赖，提供一个可二次开发的开源基础。
+- 让解析结果既可在 GUI 浏览，也可在 Python 脚本里复用。
 
-- `Inputs/ExtRef` 输入解析
-- 基于逻辑节点的 SV 输入识别
-- `SampledValueControl` 输出与 `DataSet/FCDA` 成员展开
+### 1.2 典型场景
 
-### 2.3 MMS
+- 站控层/过程层联调前的 SCD 静态检查。
+- 继保、自动化、系统集成团队的配置复核。
+- 以样例文件做解析回归测试与算法验证。
 
-当前把 **MMS 报文** 重点落在 IEC 61850 SCD 中最常见、最有可视化价值的 **报告控制块（Report Control Block, RCB）**：
+---
 
-- 解析 `ReportControl`
-- 区分 `buffered=true/false`（BRCB / URCB）
-- 解析 `RptEnabled max`
-- 解析 `ClientLN`，建立 **MMS 输入 / 输出关联**
-- 解析 `TrgOps`、`OptFields`
-- 解析关联 `DataSet` 下的 `FCDA`
+## 2. 功能概览
 
-GUI 中每个 IED 现在新增 **[MMS]** 分组：
+### 2.1 解析能力
 
-- `MMS输入 (Reports)`：显示该 IED 作为客户端接收了哪些报告
-- `MMS输出 (ReportControl)`：显示该 IED 发布了哪些报告控制块、允许哪些客户端订阅、包含哪些数据点
+- **GOOSE**
+  - `Inputs/ExtRef` 输入关系提取。
+  - `GSEControl` 输出控制块提取。
+  - 关联 `DataSet/FCDA` 成员展开。
+- **SV**
+  - `Inputs/ExtRef` 输入关系提取。
+  - `SampledValueControl` 输出提取。
+  - `DataSet/FCDA` 按 LN 分组与明细展开。
+- **MMS（ReportControl 视图）**
+  - `ReportControl`（BRCB / URCB）提取。
+  - `RptEnabled max`、`ClientLN` 客户端关联。
+  - `TrgOps`、`OptFields` 属性。
+  - 报告 `DataSet/FCDA` 成员。
 
-## 3. 工程结构
+### 2.2 GUI 能力
 
-```text
-main.py                  # GUI 启动入口
-scd_tool/
-  __init__.py
-  constants.py           # 常量
-  helpers.py             # 辅助函数（如 intAddr 解析）
-  parser.py              # SCD / GOOSE / SV / MMS 核心解析
-  gui.py                 # tkinter 图形界面
-tests/
-  test_parser.py         # 自动化测试
-scd_test/                # 现场 SCD 样例
+- `IED 信息` 树：按协议查看每个 IED 的输入/输出细节。
+- `Communication` 树：浏览 SubNetwork、ConnectedAP、GSE/SMV 配置。
+- `回路浏览器`：
+  - 装置树选择与关键字过滤。
+  - 当前装置回路聚焦。
+  - 一跳/二级关联展开。
+  - 协议筛选（GOOSE/SV/MMS）。
+  - 缩放、重置、回路摘要导出。
+
+---
+
+## 3. 安装与运行
+
+### 3.1 环境要求
+
+- Python 3.10+（建议）。
+- 操作系统自带可用 `tkinter`（多数桌面 Python 发行版默认包含）。
+
+> 本项目当前无第三方依赖要求。
+
+### 3.2 获取代码
+
+```bash
+git clone <your-repo-url>
+cd OPSEN-SCD
 ```
 
-## 4. 运行方式
-
-### 4.1 环境要求
-
-无需额外安装 Qt；GUI 基于 Python 标准库 `tkinter`。
-
-### 4.2 启动 GUI
+### 3.3 启动 GUI
 
 ```bash
 python main.py
 ```
 
-### 4.3 运行测试
+启动后点击“打开SCD文件”，选择 `.scd/.icd/.cid/...` 文件即可解析。
+
+### 3.4 运行测试
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-### 4.4 直接通过 Python 函数验证 MMS
+---
 
-```python
-from scd_tool import parse_mms_reports
+## 4. 项目结构
 
-reports = parse_mms_reports('scd_test/nhb2010040813.scd', 'P_110MH_144')
-print(reports['outputs'][0]['name'])
-print(reports['outputs'][0]['clients'])
+```text
+main.py                  # GUI 启动入口
+README.md                # 项目总说明
+scd_tool/
+  __init__.py            # 对外导出接口
+  constants.py           # 默认命名空间等常量
+  helpers.py             # 工具函数（如 intAddr 解析）
+  parser.py              # SCD 解析核心
+  gui.py                 # tkinter 图形界面
+tests/
+  test_parser.py         # 单元测试
+scd_test/                # SCD 样例文件
 ```
 
-## 5. 设计说明
+---
 
-### 5.1 为什么 MMS 先做 ReportControl
+## 5. 作为 Python 库使用
 
-现场 SCD 中“MMS 报文”通常不像 GOOSE / SV 一样直接带有独立的链路对象；对工程调试来说，最常见且最有价值的是：
+### 5.1 解析整个文件
 
-- 哪个 IED 发布了哪些报告；
-- 哪个 HMI / 网关 / 后台通过 `ClientLN` 订阅这些报告；
-- 这些报告的数据集里具体带哪些点；
-- 触发条件、可选字段、缓冲/非缓冲属性是什么。
+```python
+from scd_tool.parser import parse_all_data
 
-因此本次实现先把 **MMS=基于 ReportControl 的报告通信视图** 做完整，后续如需继续扩展到日志、文件服务、定值组等，也可以在当前架构上继续加模块。
+data = parse_all_data("scd_test/bzt.scd")
+print(data.keys())  # dict_keys(['IEDs', 'Communication'])
+```
 
-## 6. 测试数据
+### 5.2 提取 MMS 报告视图
 
-仓库里的如下样例已可直接用于回归验证：
+```python
+from scd_tool.parser import parse_mms_reports
 
-- `bzt.scd`
-- `scd_test/*.scd`
+reports = parse_mms_reports("scd_test/nhb2010040813.scd", "P_110MH_144")
+print(reports["outputs"][0]["name"])
+print(reports["outputs"][0]["clients"])
+```
 
-这些文件中包含了多种现场结构，可用于 GOOSE / SV / MMS 的联调和回归测试。
+### 5.3 路径回退机制
+
+若传入路径不存在，解析器会尝试在仓库 `scd_test/` 目录下按同名文件回退查找，便于测试与脚本调用。
+
+---
+
+## 6. 输出数据模型（简版）
+
+`parse_all_data(file)` 返回：
+
+```text
+{
+  "IEDs": [
+    {
+      "name": str,
+      "desc": str,
+      "GOOSE": {
+        "inputs": {"ExtRef": [...], "LN": [...]},
+        "outputs": [...]
+      },
+      "SV": {
+        "inputs": {"ExtRef": [...], "LN": [...]},
+        "outputs": [...]
+      },
+      "MMS": {
+        "inputs": [...],
+        "outputs": [...]
+      }
+    },
+    ...
+  ],
+  "Communication": [...]
+}
+```
+
+你可以把它直接用于：
+
+- 自定义报告导出（JSON/CSV/Excel）。
+- 拓扑比对或规则检查。
+- 二次可视化（Web/桌面）。
+
+---
+
+## 7. 回路可视化语义说明
+
+为避免误读，GUI 的图形语义如下：
+
+- **颜色 + 协议徽标**：区分 GOOSE / SV / MMS。
+- **实线**：与当前焦点 IED 一跳直连的链路。
+- **虚线**：在“展开回路”模式下出现的二级关联链路。
+- **节点副标题**：
+  - `当前装置`：焦点 IED。
+  - `一跳关联装置`：与焦点直接相关。
+  - `二级关联装置`：通过一跳装置扩展得到。
+
+详细文本（源描述、目标描述、meta）以右侧详情面板为准。
+
+---
+
+## 8. 已知限制
+
+- MMS 当前聚焦于 **ReportControl 报告通信视图**，未覆盖完整 MMS 全业务。
+- 回路图是工程辅助视图，不等价于现场实时网络状态。
+- 超大规模 SCD（海量 IED / FCDA）在 GUI 下可能出现性能下降。
+
+---
+
+## 9. 开发建议
+
+### 9.1 扩展解析
+
+推荐在 `scd_tool/parser.py` 中新增独立方法，再在 `parse_all_data` 汇总，保持现有结构一致性。
+
+### 9.2 扩展 GUI
+
+推荐优先使用现有 `build_*_rows` 与回路模型接口，减少重复计算与耦合。
+
+### 9.3 回归测试
+
+新增功能请至少补充 `tests/test_parser.py`，并覆盖：
+
+- 正常样例。
+- 缺失字段/边界条件。
+- 输出结构稳定性。
+
+---
+
+## 10. 快速命令清单
+
+```bash
+# 启动 GUI
+python main.py
+
+# 运行全部测试
+python -m unittest discover -s tests -v
+
+# 语法检查（可选）
+python -m py_compile main.py scd_tool/gui.py scd_tool/parser.py scd_tool/helpers.py scd_tool/constants.py tests/test_parser.py
+```
+
+---
+
+## 11. 许可证与贡献
+
+如你准备将该项目用于团队协作，建议补充：
+
+- `LICENSE`（例如 MIT / Apache-2.0）。
+- `CONTRIBUTING.md`（提交流程、编码规范、测试要求）。
+
+欢迎基于当前框架继续扩展更多 IEC 61850 解析与可视化能力。
