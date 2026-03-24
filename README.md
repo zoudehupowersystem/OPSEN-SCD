@@ -194,27 +194,7 @@ print(reports["outputs"][0]["clients"])
 
 ---
 
-## 9. 开发建议
-
-### 9.1 扩展解析
-
-推荐在 `scd_tool/parser.py` 中新增独立方法，再在 `parse_all_data` 汇总，保持现有结构一致性。
-
-### 9.2 扩展 GUI
-
-推荐优先使用现有 `build_*_rows` 与回路模型接口，减少重复计算与耦合。
-
-### 9.3 回归测试
-
-新增功能请至少补充 `tests/test_parser.py`，并覆盖：
-
-- 正常样例。
-- 缺失字段/边界条件。
-- 输出结构稳定性。
-
----
-
-## 10. 快速命令清单
+## 9. 快速命令清单
 
 ```bash
 # 启动 GUI
@@ -227,13 +207,3 @@ python -m unittest discover -s tests -v
 python -m py_compile main.py scd_tool/gui.py scd_tool/parser.py scd_tool/helpers.py scd_tool/constants.py tests/test_parser.py
 ```
 
----
-
-## 11. 许可证与贡献
-
-如你准备将该项目用于团队协作，建议补充：
-
-- `LICENSE`（例如 MIT / Apache-2.0）。
-- `CONTRIBUTING.md`（提交流程、编码规范、测试要求）。
-
-欢迎基于当前框架继续扩展更多 IEC 61850 解析与可视化能力。
